@@ -22,7 +22,8 @@ import { Customer, Team, VirtualKey } from "@/lib/types/governance";
 import { cn } from "@/lib/utils";
 import { formatCurrency } from "@/lib/utils/governance";
 import { RbacOperation, RbacResource, useRbac } from "@enterprise/lib";
-import { Edit, Plus, Trash2 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ChevronLeft, ChevronRight, Edit, Plus, Search, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 import CustomerDialog from "./customerDialog";
@@ -35,11 +36,17 @@ const formatResetDuration = (duration: string) => {
 
 interface CustomersTableProps {
 	customers: Customer[];
+	totalCount: number;
 	teams: Team[];
 	virtualKeys: VirtualKey[];
+	search: string;
+	onSearchChange: (value: string) => void;
+	offset: number;
+	limit: number;
+	onOffsetChange: (offset: number) => void;
 }
 
-export default function CustomersTable({ customers, teams, virtualKeys }: CustomersTableProps) {
+export default function CustomersTable({ customers, totalCount, teams, virtualKeys, search, onSearchChange, offset, limit, onOffsetChange }: CustomersTableProps) {
 	const [showCustomerDialog, setShowCustomerDialog] = useState(false);
 	const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
 
@@ -81,8 +88,10 @@ export default function CustomersTable({ customers, teams, virtualKeys }: Custom
 		return virtualKeys.filter((vk) => vk.customer_id === customerId);
 	};
 
-	// Empty state when user has no customers (same pattern as Virtual Keys)
-	if (customers?.length === 0) {
+	const hasActiveFilters = search;
+
+	// True empty state: no customers at all (not just filtered to zero)
+	if (totalCount === 0 && !hasActiveFilters) {
 		return (
 			<>
 				<TooltipProvider>
@@ -114,7 +123,20 @@ export default function CustomersTable({ customers, teams, virtualKeys }: Custom
 						</Button>
 					</div>
 
-					<div className="rounded-sm border" data-testid="customer-table-container">
+					<div className="flex items-center gap-3">
+						<div className="relative max-w-sm flex-1">
+							<Search className="text-muted-foreground absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" />
+							<Input
+								placeholder="Search by name..."
+								value={search}
+								onChange={(e) => onSearchChange(e.target.value)}
+								className="pl-9"
+								data-testid="customers-search-input"
+							/>
+						</div>
+					</div>
+
+					<div className="rounded-sm border overflow-hidden" data-testid="customer-table-container">
 						<Table>
 							<TableHeader>
 								<TableRow>
@@ -127,7 +149,14 @@ export default function CustomersTable({ customers, teams, virtualKeys }: Custom
 								</TableRow>
 							</TableHeader>
 							<TableBody>
-								{customers?.map((customer) => {
+								{customers.length === 0 ? (
+									<TableRow>
+										<TableCell colSpan={6} className="h-24 text-center">
+											<span className="text-muted-foreground text-sm">No matching customers found.</span>
+										</TableCell>
+									</TableRow>
+								) : (
+								customers.map((customer) => {
 									const customerTeams = getTeamsForCustomer(customer.id);
 									const vks = getVirtualKeysForCustomer(customer.id);
 
@@ -374,10 +403,40 @@ export default function CustomersTable({ customers, teams, virtualKeys }: Custom
 											</TableCell>
 										</TableRow>
 									);
-								})}
+								})
+								)}
 							</TableBody>
 						</Table>
 					</div>
+
+					{/* Pagination */}
+					{totalCount > 0 && (
+						<div className="flex items-center justify-between px-2">
+							<p className="text-muted-foreground text-sm">
+								Showing {offset + 1}-{Math.min(offset + limit, totalCount)} of {totalCount}
+							</p>
+							<div className="flex gap-2">
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={offset === 0}
+									onClick={() => onOffsetChange(Math.max(0, offset - limit))}
+									data-testid="customers-pagination-prev-btn"
+								>
+									<ChevronLeft className="mr-1 h-4 w-4" /> Previous
+								</Button>
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={offset + limit >= totalCount}
+									onClick={() => onOffsetChange(offset + limit)}
+									data-testid="customers-pagination-next-btn"
+								>
+									Next <ChevronRight className="ml-1 h-4 w-4" />
+								</Button>
+							</div>
+						</div>
+					)}
 				</div>
 			</TooltipProvider>
 		</>
