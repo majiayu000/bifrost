@@ -28,7 +28,7 @@ type TableVirtualKeyProviderConfig struct {
 	VirtualKeyID  string   `gorm:"type:varchar(255);not null" json:"virtual_key_id"`
 	Provider      string   `gorm:"type:varchar(50);not null" json:"provider"`
 	Weight        *float64 `json:"weight"`
-	AllowedModels []string `gorm:"type:text;serializer:json" json:"allowed_models"` // Empty means all models allowed
+	AllowedModels []string `gorm:"type:text;serializer:json" json:"allowed_models"` // ["*"] allows all models; empty denies all (deny-by-default)
 	AllowAllKeys  bool     `gorm:"default:false" json:"allow_all_keys"`             // True means all keys allowed; false with empty Keys means no keys allowed (deny-by-default)
 	BudgetID      *string  `gorm:"type:varchar(255);index" json:"budget_id,omitempty"`
 	RateLimitID   *string  `gorm:"type:varchar(255);index" json:"rate_limit_id,omitempty"`

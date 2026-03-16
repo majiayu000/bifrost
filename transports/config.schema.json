@@ -1503,7 +1503,7 @@
         },
         "allowed_models": {
           "type": "array",
-          "description": "Allowed models for this provider config (empty means all models allowed)",
+          "description": "Allowed models for this provider config. Use [\"*\"] to allow all models; empty array denies all (deny-by-default).",
           "items": {
             "type": "string"
           }
@@ -1518,7 +1518,7 @@
         },
         "keys": {
           "type": "array",
-          "description": "Provider keys for this config (empty means all keys allowed for this provider)",
+          "description": "Provider keys for this config. Use [\"*\"] as key_id to allow all keys; empty array denies all (deny-by-default).",
           "items": {
             "type": "object",
             "properties": {
@@ -1543,7 +1543,7 @@
                 "items": {
                   "type": "string"
                 },
-                "description": "Supported models for this key"
+                "description": "Models this key can access. Use [\"*\"] to allow all models; empty array denies all (deny-by-default)."
               },
               "weight": {
                 "type": "number",
@@ -2033,8 +2033,8 @@
           "items": {
             "type": "string"
           },
-          "default": [],
-          "description": "Supported models for this key"
+          "default": ["*"],
+          "description": "Models this key can access. Use [\"*\"] to allow all models; empty array denies all (deny-by-default)."
         },
         "weight": {
           "type": "number",

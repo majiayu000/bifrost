@@ -525,11 +525,14 @@ func (mc *ModelCatalog) GetProvidersForModel(model string) []schemas.ModelProvid
 //	mc.IsModelAllowedForProvider("openai", "gpt-4o", []string{"gpt-4o"})
 //	// Returns: true (direct match)
 func (mc *ModelCatalog) IsModelAllowedForProvider(provider schemas.ModelProvider, model string, allowedModels []string) bool {
-	// Case 1: Empty allowedModels = use catalog to determine support
-	// This leverages GetProvidersForModel which already handles all cross-provider logic
-	if len(allowedModels) == 0 {
+	// Case 1: ["*"] = allow all models; use catalog to determine support
+	// Empty allowedModels = deny all (fail-safe deny-by-default)
+	if slices.Contains(allowedModels, "*") {
 		supportedProviders := mc.GetProvidersForModel(model)
 		return slices.Contains(supportedProviders, provider)
+	}
+	if len(allowedModels) == 0 {
+		return false
 	}
 
 	// Case 2: Explicit allowedModels = check if model matches any entry
