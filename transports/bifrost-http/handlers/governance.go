@@ -2685,9 +2685,6 @@ func (h *GovernanceHandler) getRoutingRules(ctx *fasthttp.RequestCtx) {
 	scope := string(ctx.QueryArgs().Peek("scope"))
 	scopeID := string(ctx.QueryArgs().Peek("scope_id"))
 
-	var rules []configstoreTables.TableRoutingRule
-	var err error
-
 	// Check if "from_memory" query parameter is set to true
 	fromMemory := string(ctx.QueryArgs().Peek("from_memory")) == "true"
 	if fromMemory {
@@ -2699,12 +2696,11 @@ func (h *GovernanceHandler) getRoutingRules(ctx *fasthttp.RequestCtx) {
 		inMemoryRules := gd.RoutingRules
 
 		// Filter rules by scope and scopeID
+		var rules []configstoreTables.TableRoutingRule
 		for _, rule := range inMemoryRules {
-			// If scope filter is specified, only include matching rules
 			if scope != "" && rule.Scope != scope {
 				continue
 			}
-			// If scopeID filter is specified, only include matching rules
 			if scopeID != "" {
 				ruleScope := ""
 				if rule.ScopeID != nil {
@@ -2716,28 +2712,80 @@ func (h *GovernanceHandler) getRoutingRules(ctx *fasthttp.RequestCtx) {
 			}
 			rules = append(rules, *rule)
 		}
-	} else {
-		// Get from config store (database)
-		if scope != "" || scopeID != "" {
-			rules, err = h.configStore.GetRoutingRulesByScope(ctx, scope, scopeID)
-		} else {
-			rules, err = h.configStore.GetRoutingRules(ctx)
-		}
+
+		SendJSON(ctx, map[string]interface{}{
+			"rules":       rules,
+			"count":       len(rules),
+			"total_count": len(rules),
+			"limit":       len(rules),
+			"offset":      0,
+		})
+		return
+	}
+
+	// If scope/scopeID filters are specified, use the existing non-paginated path
+	if scope != "" || scopeID != "" {
+		rules, err := h.configStore.GetRoutingRulesByScope(ctx, scope, scopeID)
 		if err != nil {
 			SendError(ctx, 500, "Failed to get routing rules")
 			return
 		}
+		response := make([]configstoreTables.TableRoutingRule, 0, len(rules))
+		for _, rule := range rules {
+			response = append(response, rule)
+		}
+		SendJSON(ctx, map[string]interface{}{
+			"rules":       response,
+			"count":       len(response),
+			"total_count": len(response),
+			"limit":       len(response),
+			"offset":      0,
+		})
+		return
 	}
 
-	// Convert to JSON-serializable format
-	response := make([]configstoreTables.TableRoutingRule, 0, len(rules))
-	for _, rule := range rules {
-		response = append(response, rule)
+	// Paginated path (no scope/scopeID filters)
+	params := configstore.RoutingRulesQueryParams{
+		Search: string(ctx.QueryArgs().Peek("search")),
+	}
+	if limitStr := string(ctx.QueryArgs().Peek("limit")); limitStr != "" {
+		n, err := strconv.Atoi(limitStr)
+		if err != nil {
+			SendError(ctx, 400, "Invalid limit parameter: must be a number")
+			return
+		}
+		if n < 0 {
+			SendError(ctx, 400, "Invalid limit parameter: must be non-negative")
+			return
+		}
+		params.Limit = n
+	}
+	if offsetStr := string(ctx.QueryArgs().Peek("offset")); offsetStr != "" {
+		n, err := strconv.Atoi(offsetStr)
+		if err != nil {
+			SendError(ctx, 400, "Invalid offset parameter: must be a number")
+			return
+		}
+		if n < 0 {
+			SendError(ctx, 400, "Invalid offset parameter: must be non-negative")
+			return
+		}
+		params.Offset = n
 	}
 
+	params.Limit, params.Offset = ClampPaginationParams(params.Limit, params.Offset)
+	rules, totalCount, err := h.configStore.GetRoutingRulesPaginated(ctx, params)
+	if err != nil {
+		logger.Error("failed to retrieve routing rules: %v", err)
+		SendError(ctx, 500, "Failed to retrieve routing rules")
+		return
+	}
 	SendJSON(ctx, map[string]interface{}{
-		"rules": response,
-		"count": len(response),
+		"rules":       rules,
+		"count":       len(rules),
+		"total_count": totalCount,
+		"limit":       params.Limit,
+		"offset":      params.Offset,
 	})
 }
 
