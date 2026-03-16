@@ -321,6 +321,9 @@ func (h *GovernanceHandler) getVirtualKeys(ctx *fasthttp.RequestCtx) {
 		SendJSON(ctx, map[string]interface{}{
 			"virtual_keys": virtualKeys,
 			"count":        len(virtualKeys),
+			"total_count":  len(virtualKeys),
+			"limit":        len(virtualKeys),
+			"offset":       0,
 		})
 		return
 	}
@@ -355,6 +358,7 @@ func (h *GovernanceHandler) getVirtualKeys(ctx *fasthttp.RequestCtx) {
 		params.Offset = n
 	}
 
+	params.Limit, params.Offset = ClampPaginationParams(params.Limit, params.Offset)
 	virtualKeys, totalCount, err := h.configStore.GetVirtualKeysPaginated(ctx, params)
 	if err != nil {
 		logger.Error("failed to retrieve virtual keys: %v", err)
@@ -1992,21 +1996,57 @@ func (h *GovernanceHandler) getModelConfigs(ctx *fasthttp.RequestCtx) {
 			SendError(ctx, 500, "Governance data is not available")
 			return
 		}
-		SendJSON(ctx, map[string]interface{}{
+		SendJSON(ctx, map[string]any{
 			"model_configs": data.ModelConfigs,
 			"count":         len(data.ModelConfigs),
+			"total_count":   len(data.ModelConfigs),
+			"limit":         len(data.ModelConfigs),
+			"offset":        0,
 		})
 		return
 	}
-	modelConfigs, err := h.configStore.GetModelConfigs(ctx)
+
+	params := configstore.ModelConfigsQueryParams{
+		Search: string(ctx.QueryArgs().Peek("search")),
+	}
+	if limitStr := string(ctx.QueryArgs().Peek("limit")); limitStr != "" {
+		n, err := strconv.Atoi(limitStr)
+		if err != nil {
+			SendError(ctx, 400, "Invalid limit parameter: must be a number")
+			return
+		}
+		if n < 0 {
+			SendError(ctx, 400, "Invalid limit parameter: must be non-negative")
+			return
+		}
+		params.Limit = n
+	}
+	if offsetStr := string(ctx.QueryArgs().Peek("offset")); offsetStr != "" {
+		n, err := strconv.Atoi(offsetStr)
+		if err != nil {
+			SendError(ctx, 400, "Invalid offset parameter: must be a number")
+			return
+		}
+		if n < 0 {
+			SendError(ctx, 400, "Invalid offset parameter: must be non-negative")
+			return
+		}
+		params.Offset = n
+	}
+
+	params.Limit, params.Offset = ClampPaginationParams(params.Limit, params.Offset)
+	modelConfigs, totalCount, err := h.configStore.GetModelConfigsPaginated(ctx, params)
 	if err != nil {
 		logger.Error("failed to retrieve model configs: %v", err)
 		SendError(ctx, 500, "Failed to retrieve model configs")
 		return
 	}
-	SendJSON(ctx, map[string]interface{}{
+	SendJSON(ctx, map[string]any{
 		"model_configs": modelConfigs,
 		"count":         len(modelConfigs),
+		"total_count":   totalCount,
+		"limit":         params.Limit,
+		"offset":        params.Offset,
 	})
 }
 
